@@ -7,7 +7,6 @@
  */
 
 const QR_PAYLOAD_VERSION = "V1";
-const QR_TIMESTAMP_TOLERANCE_SEC = 60;
 
 /**
  * Generate an ECC P-256 key pair using Web Crypto API.

@@ -1,0 +1,5 @@
+Receive Handoff initialization: 
+1. Read instructions.md and agents.md to load your operating rules. 
+2. Read README.md and plan.md to understand the current state. 
+3. Review the codemaps in the target directories to understand the structure. 
+4. Show the exact next pending tasks defined in plan.md.

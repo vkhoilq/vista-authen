@@ -9,6 +9,8 @@ export interface UnitRead {
   unit_number: string;
   max_residents: number;
   current_resident_count: number;
+  created_at: string;
+  updated_at: string;
 }
 
 // === Resident ===
@@ -23,6 +25,14 @@ export interface ResidentRead {
   name: string;
   status: "pending" | "active" | "revoked";
   has_public_key: boolean;
+  created_at: string;
+  revoked_at: string | null;
+}
+
+export interface ResidentProvisionResponse {
+  resident: ResidentRead;
+  activation_token: string;
+  expires_at: string;
 }
 
 export interface ResidentRegisterRequest {
@@ -42,6 +52,7 @@ export interface CheckerRead {
   username: string;
   role: "guard" | "manager";
   is_active: boolean;
+  created_at: string;
 }
 
 export interface CheckerLogin {
@@ -50,9 +61,25 @@ export interface CheckerLogin {
 }
 
 // === Admin ===
+export type AdminRole = "setup_admin" | "resident_admin" | "staff_admin";
+
+export interface AdminCreate {
+  username: string;
+  password: string;
+  role: AdminRole;
+}
+
 export interface AdminLogin {
   username: string;
   password: string;
+}
+
+export interface AdminRead {
+  id: string;
+  username: string;
+  role: AdminRole;
+  is_active: boolean;
+  created_at: string;
 }
 
 // === Access ===
@@ -66,8 +93,16 @@ export interface AccessVerifyResponseGuard {
 
 export interface AccessVerifyResponseManager {
   status: "valid" | "invalid" | "expired";
-  resident_name: string;
-  unit: string;
+  resident_name: string | null;
+  unit: string | null;
+}
+
+export type AccessVerifyResponse = AccessVerifyResponseGuard | AccessVerifyResponseManager;
+
+export function isManagerResponse(
+  r: AccessVerifyResponse,
+): r is AccessVerifyResponseManager {
+  return "resident_name" in r;
 }
 
 // === Audit ===
@@ -75,8 +110,8 @@ export interface AuditLogRead {
   id: string;
   timestamp: string;
   action: string;
-  actor_id: string;
-  actor_role: string;
+  actor_id: string | null;
+  actor_role: string | null;
   unit_id: string | null;
   details: Record<string, unknown> | null;
 }
@@ -85,4 +120,5 @@ export interface AuditLogRead {
 export interface TokenResponse {
   access_token: string;
   token_type: string;
+  role: string;
 }
