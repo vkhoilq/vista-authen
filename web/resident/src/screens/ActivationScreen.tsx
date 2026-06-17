@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { api, generateKeyPair } from "@vista-authen/shared";
 
+import axios from "axios";
+
 interface ActivationScreenProps {
   onActivated: () => void;
 }
@@ -29,7 +31,13 @@ export default function ActivationScreen({ onActivated }: ActivationScreenProps)
       localStorage.setItem("resident_id", response.data.id);
       onActivated();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Activation failed");
+      if (axios.isAxiosError(err) && err.response?.data?.detail) {
+        setError(err.response.data.detail);
+      } else if (axios.isAxiosError(err) && err.message) {
+        setError(`Network error: ${err.message}`);
+      } else {
+        setError(err instanceof Error ? err.message : "Activation failed");
+      }
     } finally {
       setLoading(false);
     }

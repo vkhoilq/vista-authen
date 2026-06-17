@@ -189,6 +189,7 @@ export default function Dashboard({ role, onLogout }: DashboardProps) {
                 <>
                   <p>Resident: {result.resident_name}</p>
                   <p>Unit: {result.unit}</p>
+                  {result.phone && <p>Phone: {result.phone}</p>}
                 </>
               )}
             </div>

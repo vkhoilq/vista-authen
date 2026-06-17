@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import axios from "axios";
 import { api } from "@vista-authen/shared";
 import type { AuditLogRead } from "@vista-authen/shared";
 
@@ -23,7 +24,13 @@ export default function AuditLogViewer(_props: AuditLogViewerProps) {
       const response = await api.get("/api/v1/audit-logs", { params });
       setLogs(response.data);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to load audit logs");
+      if (axios.isAxiosError(err) && err.response?.data?.detail) {
+        setError(err.response.data.detail);
+      } else if (axios.isAxiosError(err) && err.message) {
+        setError(`Network error: ${err.message}`);
+      } else {
+        setError(err instanceof Error ? err.message : "Failed to load audit logs");
+      }
     } finally {
       setLoading(false);
     }

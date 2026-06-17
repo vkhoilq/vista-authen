@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.deps import require_admin_role, require_checker_role
+from app.core.deps import require_admin_role, require_checker_role, require_staff_admin_or_manager
 from app.models.models import Admin, AdminRole, Checker, CheckerRole
 from app.schemas.schemas import AuditLogRead
 from app.services.audit_service import AuditService
@@ -21,7 +21,7 @@ async def list_audit_logs(
     page_size: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
     # Staff Admin or Manager can view audit logs
-    _admin: Admin = Depends(require_admin_role(AdminRole.STAFF_ADMIN)),
+    _current_user = Depends(require_staff_admin_or_manager),
 ):
     """List audit logs with pagination and filtering. Staff Admin only."""
     svc = AuditService(db)

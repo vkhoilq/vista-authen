@@ -1,6 +1,7 @@
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+from cryptography.hazmat.primitives import serialization
 
 from app.models.models import AdminRole, CheckerRole, ResidentStatus
 
@@ -36,6 +37,8 @@ class UnitRead(BaseModel):
 class ResidentCreate(BaseModel):
     unit_id: str
     name: str = Field(..., min_length=1, max_length=255)
+    phone: str | None = Field(None, max_length=50)
+    email: str | None = Field(None, max_length=255)
 
 
 class ResidentRead(BaseModel):
@@ -44,15 +47,32 @@ class ResidentRead(BaseModel):
     name: str
     status: ResidentStatus
     has_public_key: bool
+    is_owner: bool
+    phone: str | None = None
+    email: str | None = None
     created_at: datetime
     revoked_at: datetime | None = None
 
     model_config = {"from_attributes": True}
 
 
+class ResidentUpdateContact(BaseModel):
+    phone: str | None = Field(None, max_length=50)
+    email: str | None = Field(None, max_length=255)
+
+
 class ResidentRegisterRequest(BaseModel):
     activation_token: str
-    public_key_pem: str = Field(..., min_length=1)
+    public_key_pem: str = Field(..., min_length=1, max_length=10240)
+
+    @field_validator("public_key_pem")
+    @classmethod
+    def validate_public_key(cls, v: str) -> str:
+        try:
+            serialization.load_pem_public_key(v.encode("utf-8"))
+        except Exception as e:
+            raise ValueError(f"Invalid PEM public key: {str(e)}")
+        return v
 
 
 # ============================================================
@@ -115,7 +135,7 @@ class AdminLogin(BaseModel):
 # ============================================================
 
 class AccessVerifyRequest(BaseModel):
-    qr_payload: str = Field(..., min_length=1)
+    qr_payload: str = Field(..., min_length=1, max_length=10240)
 
 
 class AccessVerifyResponseGuard(BaseModel):
@@ -126,6 +146,7 @@ class AccessVerifyResponseManager(BaseModel):
     status: str  # "valid" | "invalid" | "expired"
     resident_name: str | None = None
     unit: str | None = None
+    phone: str | None = None
 
 
 # ============================================================

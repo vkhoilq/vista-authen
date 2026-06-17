@@ -38,3 +38,9 @@ node_modules/
 web/resident/dist/
 web/checker/dist/
 web/shared/dist/
+web/admin/dist/
+
+# Databases
+*.db
+*.db-journal
+*.db-wal

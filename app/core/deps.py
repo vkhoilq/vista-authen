@@ -111,3 +111,65 @@ def require_checker_role(*roles: CheckerRole):
         return checker
 
     return _check
+
+
+async def get_current_admin_or_checker(
+    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
+    db: AsyncSession = Depends(get_db),
+) -> Admin | Checker:
+    """Extract and validate either admin or checker from JWT token."""
+    payload = decode_access_token(credentials.credentials)
+    if payload is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token",
+        )
+
+    user_type = payload.get("type")
+    user_id = payload.get("sub")
+    if user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token payload",
+        )
+
+    if user_type == "admin":
+        admin = await db.get(Admin, uuid.UUID(user_id))
+        if admin is None or not admin.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Admin not found or deactivated",
+            )
+        return admin
+    elif user_type == "checker":
+        checker = await db.get(Checker, uuid.UUID(user_id))
+        if checker is None or not checker.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Checker not found or deactivated",
+            )
+        return checker
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token type",
+        )
+
+
+async def require_staff_admin_or_manager(
+    user: Admin | Checker = Depends(get_current_admin_or_checker),
+) -> Admin | Checker:
+    """Dependency requiring either Staff Admin or Manager role."""
+    if isinstance(user, Admin):
+        if user.role != AdminRole.STAFF_ADMIN:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Requires Staff Admin role",
+            )
+    elif isinstance(user, Checker):
+        if user.role != CheckerRole.MANAGER:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Requires Manager role",
+            )
+    return user

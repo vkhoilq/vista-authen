@@ -1,8 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
+from slowapi.util import get_remote_address
 
 from app.core.database import get_db
 from app.core.security import create_access_token
+from app.core.limiter import limiter
 from app.models.models import AdminRole, CheckerRole
 from app.schemas.schemas import AdminLogin, CheckerLogin, TokenResponse
 from app.services.admin_service import AdminService
@@ -12,7 +14,12 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 @router.post("/admin/login", response_model=TokenResponse)
-async def admin_login(body: AdminLogin, db: AsyncSession = Depends(get_db)):
+@limiter.limit("5/minute", key_func=get_remote_address)
+async def admin_login(
+    request: Request,
+    body: AdminLogin,
+    db: AsyncSession = Depends(get_db)
+):
     """Authenticate an admin and return a JWT."""
     svc = AdminService(db)
     admin = await svc.authenticate(username=body.username, password=body.password)
@@ -29,7 +36,12 @@ async def admin_login(body: AdminLogin, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/checker/login", response_model=TokenResponse)
-async def checker_login(body: CheckerLogin, db: AsyncSession = Depends(get_db)):
+@limiter.limit("5/minute", key_func=get_remote_address)
+async def checker_login(
+    request: Request,
+    body: CheckerLogin,
+    db: AsyncSession = Depends(get_db)
+):
     """Authenticate a checker and return a JWT."""
     svc = CheckerService(db)
     checker = await svc.authenticate(username=body.username, password=body.password)

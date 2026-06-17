@@ -24,6 +24,14 @@ class AccessService:
 
         Returns a dict with at least 'status' and 'action' keys.
         """
+        # Check payload size
+        if len(qr_payload) > 10240:
+            return await self._reject(
+                action="scan_failed_bad_signature",
+                checker_id=checker_id,
+                details={"reason": "payload_too_large"},
+            )
+
         # Parse QR payload
         parts = qr_payload.split("|")
         if len(parts) != 4 or parts[0] != "V1":
@@ -87,7 +95,17 @@ class AccessService:
                 details={"reason": "invalid_signature_encoding"},
             )
 
-        if not self.crypto.verify_signature(resident.public_key, payload_str.encode(), signature_bytes):
+        try:
+            signature_valid = self.crypto.verify_signature(resident.public_key, payload_str.encode(), signature_bytes)
+        except Exception as e:
+            return await self._reject(
+                action="scan_failed_bad_signature",
+                checker_id=checker_id,
+                resident_id=resident_id,
+                details={"reason": "signature_verification_error", "error": str(e)},
+            )
+
+        if not signature_valid:
             return await self._reject(
                 action="scan_failed_bad_signature",
                 checker_id=checker_id,
@@ -115,6 +133,7 @@ class AccessService:
                 "status": "valid",
                 "resident_name": resident.name,
                 "unit": unit.unit_number if unit else "Unknown",
+                "phone": resident.phone,
             }
         else:
             return {"status": "valid"}

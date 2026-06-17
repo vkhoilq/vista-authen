@@ -10,7 +10,7 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react()],
     server: {
-      port: 62147,
+      port: 62148,
       allowedHosts: allowedHosts,
     },
   };

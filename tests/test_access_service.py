@@ -69,6 +69,42 @@ class TestAccessServiceVerifyValid:
         assert result["status"] == "valid"
         assert result["resident_name"] == "Test Resident"
         assert result["unit"] == "A-101"
+        assert result["phone"] is None
+
+    async def test_verify_valid_qr_manager_receives_owner_phone(self, db_session: AsyncSession, sample_unit, sample_manager):
+        resident, private_key = await _create_active_resident_with_key(db_session, sample_unit.id)
+        resident.is_owner = True
+        resident.phone = "+1234567890"
+        await db_session.flush()
+        
+        svc = AccessService(db_session)
+        timestamp = int(datetime.now(timezone.utc).timestamp())
+        payload_str = f"{resident.id}|{timestamp}"
+        sig_b64 = _sign_payload(private_key, payload_str)
+        qr_payload = _build_qr_payload(resident.id, timestamp, sig_b64)
+
+        result = await svc.verify(qr_payload, sample_manager.id)
+        assert result["status"] == "valid"
+        assert result["resident_name"] == "Test Resident"
+        assert result["unit"] == "A-101"
+        assert result["phone"] == "+1234567890"
+
+    async def test_verify_valid_qr_guard_no_phone(self, db_session: AsyncSession, sample_unit, sample_checker):
+        resident, private_key = await _create_active_resident_with_key(db_session, sample_unit.id)
+        resident.is_owner = True
+        resident.phone = "+1234567890"
+        await db_session.flush()
+        
+        svc = AccessService(db_session)
+        timestamp = int(datetime.now(timezone.utc).timestamp())
+        payload_str = f"{resident.id}|{timestamp}"
+        sig_b64 = _sign_payload(private_key, payload_str)
+        qr_payload = _build_qr_payload(resident.id, timestamp, sig_b64)
+
+        result = await svc.verify(qr_payload, sample_checker.id)
+        assert result["status"] == "valid"
+        assert "phone" not in result
+
 
 
 class TestAccessServiceVerifyExpired:

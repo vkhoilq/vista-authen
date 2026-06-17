@@ -14,7 +14,14 @@ class ResidentService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def provision(self, unit_id: uuid.UUID, name: str, actor_id: uuid.UUID | None = None) -> dict:
+    async def provision(
+        self,
+        unit_id: uuid.UUID,
+        name: str,
+        phone: str | None = None,
+        email: str | None = None,
+        actor_id: uuid.UUID | None = None
+    ) -> dict:
         """Create a new resident with capacity enforcement. Returns dict with resident + token."""
         # Check unit exists
         unit = await self.db.get(Unit, unit_id)
@@ -37,8 +44,35 @@ class ResidentService:
                 f"is at capacity ({active_count}/{unit.max_residents})"
             )
 
+        # Determine ownership
+        result = await self.db.execute(
+            select(Resident).where(
+                Resident.unit_id == unit_id,
+                Resident.is_owner == True,
+                Resident.status != ResidentStatus.REVOKED
+            )
+        )
+        owner = result.scalars().first()
+        is_first_resident = owner is None
+
+        if is_first_resident:
+            if not phone or not phone.strip() or not email or not email.strip():
+                raise ValueError("The first resident of a unit is designated as the Owner and must provide a telephone number and email address.")
+            is_owner = True
+        else:
+            if phone or email:
+                raise ValueError("Only the apartment Owner (the first resident) can have a telephone number and email address.")
+            is_owner = False
+
         # Create resident
-        resident = Resident(unit_id=unit_id, name=name, status=ResidentStatus.PENDING)
+        resident = Resident(
+            unit_id=unit_id,
+            name=name,
+            status=ResidentStatus.PENDING,
+            is_owner=is_owner,
+            phone=phone.strip() if is_owner and phone else None,
+            email=email.strip() if is_owner and email else None
+        )
         self.db.add(resident)
         await self.db.flush()
 
@@ -57,7 +91,7 @@ class ResidentService:
             actor_id=actor_id,
             actor_role="resident_admin",
             unit_id=unit_id,
-            details={"resident_id": str(resident.id), "resident_name": name},
+            details={"resident_id": str(resident.id), "resident_name": name, "is_owner": is_owner},
         )
 
         return {"resident": resident, "activation_token": token}
@@ -76,7 +110,11 @@ class ResidentService:
         if token.used_at is not None:
             raise ValueError("Activation token already used")
 
-        if token.expires_at < datetime.now(timezone.utc):
+        expires_at = token.expires_at
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+
+        if expires_at < datetime.now(timezone.utc):
             raise ValueError("Activation token expired")
 
         # Get resident
@@ -124,6 +162,44 @@ class ResidentService:
             actor_role="resident_admin",
             unit_id=resident.unit_id,
             details={"resident_id": str(resident_id), "resident_name": resident.name},
+        )
+
+        return resident
+
+    async def update_contact(
+        self,
+        resident_id: uuid.UUID,
+        phone: str | None = None,
+        email: str | None = None,
+        actor_id: uuid.UUID | None = None,
+    ) -> Resident | None:
+        """Update contact details for an owner. Only owner's details can be changed."""
+        resident = await self.db.get(Resident, resident_id)
+        if resident is None:
+            return None
+
+        if not resident.is_owner:
+            raise ValueError("Only the apartment Owner's contact information can be updated.")
+
+        # Update contact info
+        if phone is not None:
+            if not phone.strip():
+                raise ValueError("Telephone number cannot be empty for the Owner.")
+            resident.phone = phone.strip()
+        if email is not None:
+            if not email.strip():
+                raise ValueError("Email address cannot be empty for the Owner.")
+            resident.email = email.strip()
+
+        await self.db.flush()
+
+        # Log change
+        await self._log_action(
+            action="owner_contact_updated",
+            actor_id=actor_id,
+            actor_role="resident_admin",
+            unit_id=resident.unit_id,
+            details={"resident_id": str(resident.id), "phone": resident.phone, "email": resident.email},
         )
 
         return resident

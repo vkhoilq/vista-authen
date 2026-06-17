@@ -3,7 +3,7 @@ import axios from "axios";
 import { api } from "@vista-authen/shared";
 
 interface LoginScreenProps {
-  onLogin: (jwt: string, role: "guard" | "manager") => void;
+  onLogin: (jwt: string, role: string) => void;
 }
 
 export default function LoginScreen({ onLogin }: LoginScreenProps) {
@@ -18,7 +18,7 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
     setLoading(true);
 
     try {
-      const response = await api.post("/api/v1/auth/checker/login", {
+      const response = await api.post("/api/v1/auth/admin/login", {
         username,
         password,
       });
@@ -37,11 +37,11 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
   };
 
   return (
-    <div style={{ maxWidth: 400, margin: "2rem auto", padding: "0 1rem" }}>
-      <h1>Checker Login</h1>
+    <div style={{ maxWidth: 400, margin: "6rem auto", padding: "2rem", background: "white", borderRadius: 8, boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)" }}>
+      <h2 style={{ textAlign: "center", marginBottom: "1.5rem", color: "#1f2937" }}>Admin Portal Login</h2>
       <form onSubmit={handleLogin}>
         <div style={{ marginBottom: "1rem" }}>
-          <label htmlFor="username" style={{ display: "block", marginBottom: "0.5rem" }}>
+          <label htmlFor="username" style={{ display: "block", marginBottom: "0.5rem", color: "#4b5563", fontWeight: 500 }}>
             Username
           </label>
           <input
@@ -49,12 +49,13 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
             type="text"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
-            style={{ width: "100%", padding: "0.5rem", fontSize: "1rem" }}
+            style={{ width: "100%", padding: "0.5rem", fontSize: "1rem", borderRadius: 4, border: "1px solid #d1d5db", boxSizing: "border-box" }}
+            placeholder="Enter admin username"
           />
         </div>
 
-        <div style={{ marginBottom: "1rem" }}>
-          <label htmlFor="password" style={{ display: "block", marginBottom: "0.5rem" }}>
+        <div style={{ marginBottom: "1.5rem" }}>
+          <label htmlFor="password" style={{ display: "block", marginBottom: "0.5rem", color: "#4b5563", fontWeight: 500 }}>
             Password
           </label>
           <input
@@ -62,11 +63,12 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            style={{ width: "100%", padding: "0.5rem", fontSize: "1rem" }}
+            style={{ width: "100%", padding: "0.5rem", fontSize: "1rem", borderRadius: 4, border: "1px solid #d1d5db", boxSizing: "border-box" }}
+            placeholder="Enter password"
           />
         </div>
 
-        {error && <div style={{ color: "red", marginBottom: "1rem" }}>{error}</div>}
+        {error && <div style={{ color: "#dc2626", marginBottom: "1rem", fontSize: "0.875rem", textAlign: "center" }}>{error}</div>}
 
         <button
           type="submit"
@@ -75,8 +77,14 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
             width: "100%",
             padding: "0.75rem",
             fontSize: "1rem",
+            color: "white",
+            backgroundColor: "#2563eb",
+            border: "none",
+            borderRadius: 4,
+            fontWeight: 600,
             cursor: username && password && !loading ? "pointer" : "not-allowed",
-            opacity: username && password && !loading ? 1 : 0.5,
+            opacity: username && password && !loading ? 1 : 0.7,
+            transition: "background-color 0.2s",
           }}
         >
           {loading ? "Logging in..." : "Login"}

@@ -13,18 +13,33 @@ from app.services.resident_service import ResidentService
 class TestResidentServiceProvision:
     async def test_provision_resident(self, db_session: AsyncSession, sample_unit):
         svc = ResidentService(db_session)
-        result = await svc.provision(unit_id=sample_unit.id, name="Nguyen Van A")
+        result = await svc.provision(
+            unit_id=sample_unit.id,
+            name="Nguyen Van A",
+            phone="+1234567890",
+            email="owner@example.com"
+        )
         assert result["resident"].name == "Nguyen Van A"
         assert result["resident"].status == ResidentStatus.PENDING
         assert result["resident"].unit_id == sample_unit.id
+        assert result["resident"].is_owner is True
+        assert result["resident"].phone == "+1234567890"
+        assert result["resident"].email == "owner@example.com"
         assert result["activation_token"] is not None
         assert result["activation_token"].token is not None
 
     async def test_provision_resident_with_actor(self, db_session: AsyncSession, sample_unit):
         svc = ResidentService(db_session)
         actor_id = uuid.uuid4()
-        result = await svc.provision(unit_id=sample_unit.id, name="Test", actor_id=actor_id)
+        result = await svc.provision(
+            unit_id=sample_unit.id,
+            name="Test",
+            phone="+1234567890",
+            email="owner@example.com",
+            actor_id=actor_id
+        )
         assert result["resident"] is not None
+        assert result["resident"].is_owner is True
 
     async def test_provision_nonexistent_unit(self, db_session: AsyncSession):
         svc = ResidentService(db_session)
@@ -34,9 +49,21 @@ class TestResidentServiceProvision:
     async def test_provision_at_capacity(self, db_session: AsyncSession, sample_unit):
         """Unit with max_residents=2 should block the 3rd resident."""
         svc = ResidentService(db_session)
-        # Add 2 active residents to fill capacity
-        r1 = Resident(unit_id=sample_unit.id, name="R1", status=ResidentStatus.ACTIVE)
-        r2 = Resident(unit_id=sample_unit.id, name="R2", status=ResidentStatus.ACTIVE)
+        # Add 2 active residents to fill capacity (first one must be owner with phone/email)
+        r1 = Resident(
+            unit_id=sample_unit.id,
+            name="R1",
+            status=ResidentStatus.ACTIVE,
+            is_owner=True,
+            phone="+1234567890",
+            email="owner@example.com"
+        )
+        r2 = Resident(
+            unit_id=sample_unit.id,
+            name="R2",
+            status=ResidentStatus.ACTIVE,
+            is_owner=False
+        )
         db_session.add_all([r1, r2])
         await db_session.flush()
 
@@ -46,20 +73,63 @@ class TestResidentServiceProvision:
     async def test_provision_revoked_does_not_count(self, db_session: AsyncSession, sample_unit):
         """Revoked residents should not count toward capacity."""
         svc = ResidentService(db_session)
-        r1 = Resident(unit_id=sample_unit.id, name="R1", status=ResidentStatus.ACTIVE)
-        r2 = Resident(unit_id=sample_unit.id, name="R2", status=ResidentStatus.REVOKED)
+        r1 = Resident(
+            unit_id=sample_unit.id,
+            name="R1",
+            status=ResidentStatus.ACTIVE,
+            is_owner=True,
+            phone="+1234567890",
+            email="owner@example.com"
+        )
+        r2 = Resident(
+            unit_id=sample_unit.id,
+            name="R2",
+            status=ResidentStatus.REVOKED,
+            is_owner=False
+        )
         db_session.add_all([r1, r2])
         await db_session.flush()
 
         # Should succeed — only 1 active, max is 2
         result = await svc.provision(unit_id=sample_unit.id, name="R3")
         assert result["resident"] is not None
+        assert result["resident"].is_owner is False
+        assert result["resident"].phone is None
+        assert result["resident"].email is None
+
+    async def test_provision_first_resident_requires_contact_info(self, db_session: AsyncSession, sample_unit):
+        svc = ResidentService(db_session)
+        with pytest.raises(ValueError, match="must provide a telephone number and email address"):
+            await svc.provision(unit_id=sample_unit.id, name="Owner No Contact")
+
+    async def test_provision_subsequent_resident_rejects_contact_info(self, db_session: AsyncSession, sample_unit):
+        svc = ResidentService(db_session)
+        # Create Owner first
+        await svc.provision(
+            unit_id=sample_unit.id,
+            name="Owner",
+            phone="+1234567890",
+            email="owner@example.com"
+        )
+        # Try creating second resident with contact info
+        with pytest.raises(ValueError, match="Only the apartment Owner.*can have a telephone number"):
+            await svc.provision(
+                unit_id=sample_unit.id,
+                name="Regular Resident",
+                phone="+0987654321",
+                email="regular@example.com"
+            )
 
 
 class TestResidentServiceRegisterDevice:
     async def test_register_device_success(self, db_session: AsyncSession, sample_unit):
         svc = ResidentService(db_session)
-        result = await svc.provision(unit_id=sample_unit.id, name="Test Resident")
+        result = await svc.provision(
+            unit_id=sample_unit.id,
+            name="Test Resident",
+            phone="+1234567890",
+            email="owner@example.com"
+        )
         token = result["activation_token"].token
 
         # Generate a real ECC key pair
@@ -80,7 +150,12 @@ class TestResidentServiceRegisterDevice:
 
     async def test_register_device_already_used_token(self, db_session: AsyncSession, sample_unit):
         svc = ResidentService(db_session)
-        result = await svc.provision(unit_id=sample_unit.id, name="Test")
+        result = await svc.provision(
+            unit_id=sample_unit.id,
+            name="Test",
+            phone="+1234567890",
+            email="owner@example.com"
+        )
         token = result["activation_token"].token
 
         private_key = ec.generate_private_key(ec.SECP256R1())
@@ -98,7 +173,12 @@ class TestResidentServiceRegisterDevice:
 
     async def test_register_device_expired_token(self, db_session: AsyncSession, sample_unit):
         svc = ResidentService(db_session)
-        result = await svc.provision(unit_id=sample_unit.id, name="Test")
+        result = await svc.provision(
+            unit_id=sample_unit.id,
+            name="Test",
+            phone="+1234567890",
+            email="owner@example.com"
+        )
         token_obj = result["activation_token"]
 
         # Manually expire the token
@@ -118,7 +198,12 @@ class TestResidentServiceRegisterDevice:
 class TestResidentServiceRevoke:
     async def test_revoke_active_resident(self, db_session: AsyncSession, sample_unit):
         svc = ResidentService(db_session)
-        result = await svc.provision(unit_id=sample_unit.id, name="Test")
+        result = await svc.provision(
+            unit_id=sample_unit.id,
+            name="Test",
+            phone="+1234567890",
+            email="owner@example.com"
+        )
 
         # Activate the resident first
         private_key = ec.generate_private_key(ec.SECP256R1())
@@ -146,14 +231,80 @@ class TestResidentServiceRevoke:
 class TestResidentServiceGetAndList:
     async def test_get_resident(self, db_session: AsyncSession, sample_unit):
         svc = ResidentService(db_session)
-        result = await svc.provision(unit_id=sample_unit.id, name="Test")
+        result = await svc.provision(
+            unit_id=sample_unit.id,
+            name="Test",
+            phone="+1234567890",
+            email="owner@example.com"
+        )
         found = await svc.get(result["resident"].id)
         assert found is not None
         assert found.name == "Test"
 
     async def test_list_by_unit(self, db_session: AsyncSession, sample_unit):
         svc = ResidentService(db_session)
-        await svc.provision(unit_id=sample_unit.id, name="R1")
+        await svc.provision(
+            unit_id=sample_unit.id,
+            name="R1",
+            phone="+1234567890",
+            email="owner@example.com"
+        )
         await svc.provision(unit_id=sample_unit.id, name="R2")
         residents = await svc.list_by_unit(sample_unit.id)
         assert len(residents) == 2
+
+
+class TestResidentServiceUpdateContact:
+    async def test_update_contact_success(self, db_session: AsyncSession, sample_unit):
+        svc = ResidentService(db_session)
+        result = await svc.provision(
+            unit_id=sample_unit.id,
+            name="Owner",
+            phone="+1234567890",
+            email="owner@example.com"
+        )
+        resident_id = result["resident"].id
+
+        updated = await svc.update_contact(
+            resident_id=resident_id,
+            phone="+1999999999",
+            email="new_owner@example.com"
+        )
+        assert updated is not None
+        assert updated.phone == "+1999999999"
+        assert updated.email == "new_owner@example.com"
+
+    async def test_update_contact_non_owner_fails(self, db_session: AsyncSession, sample_unit):
+        svc = ResidentService(db_session)
+        # Create owner
+        await svc.provision(
+            unit_id=sample_unit.id,
+            name="Owner",
+            phone="+1234567890",
+            email="owner@example.com"
+        )
+        # Create regular resident
+        res2 = await svc.provision(
+            unit_id=sample_unit.id,
+            name="R2"
+        )
+        res2_id = res2["resident"].id
+
+        with pytest.raises(ValueError, match="Only the apartment Owner's contact information can be updated"):
+            await svc.update_contact(resident_id=res2_id, phone="+12345", email="r2@example.com")
+
+    async def test_update_contact_empty_fails(self, db_session: AsyncSession, sample_unit):
+        svc = ResidentService(db_session)
+        result = await svc.provision(
+            unit_id=sample_unit.id,
+            name="Owner",
+            phone="+1234567890",
+            email="owner@example.com"
+        )
+        resident_id = result["resident"].id
+
+        with pytest.raises(ValueError, match="Telephone number cannot be empty"):
+            await svc.update_contact(resident_id=resident_id, phone="   ", email="owner@example.com")
+
+        with pytest.raises(ValueError, match="Email address cannot be empty"):
+            await svc.update_contact(resident_id=resident_id, phone="+1234567890", email=" ")

@@ -24,6 +24,13 @@ class CryptoService:
         except (ValueError, TypeError):
             return False
 
+        # Convert Web Crypto raw ECDSA signature (64 bytes) to DER format for OpenSSL
+        if isinstance(public_key, ec.EllipticCurvePublicKey) and len(signature) == 64:
+            from cryptography.hazmat.primitives.asymmetric.utils import encode_dss_signature
+            r = int.from_bytes(signature[:32], byteorder="big")
+            s = int.from_bytes(signature[32:], byteorder="big")
+            signature = encode_dss_signature(r, s)
+
         try:
             if isinstance(public_key, ec.EllipticCurvePublicKey):
                 public_key.verify(signature, payload, ec.ECDSA(hashes.SHA256()))

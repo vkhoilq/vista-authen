@@ -8,6 +8,9 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "Vista Authen"
     VERSION: str = "0.1.0"
 
+    # Domain configs
+    DOMAIN_NAME: str = "example.com"
+
     # Database
     DATABASE_URL: str = "postgresql+asyncpg://vista:vista@localhost:5432/vista_authen"
     DATABASE_ECHO: bool = False
@@ -35,6 +38,10 @@ class Settings(BaseSettings):
 
     # Rate limiting
     RATE_LIMIT_PER_MINUTE: int = 30
+
+    # Maintenance / Security
+    AUDIT_LOG_RETENTION_DAYS: int = 90
+    CLEANUP_INTERVAL_SECONDS: int = 3600
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
